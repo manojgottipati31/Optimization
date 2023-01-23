@@ -1,0 +1,127 @@
+import pandas as pd
+from pulp import *
+import numpy as np
+# row i
+# col j
+
+#   SOLD
+# P
+# U
+# R
+
+# xij - amounts of currency i purchased for currency j
+
+xls = pd.ExcelFile(r'/Users/manojgottipati/Desktop/MQF/Rutgers Coursework/Term2/Opti/Assignments/Ques/currency_2023_data.xlsx')
+curr_df = pd.read_excel(xls, 'Exchange Plan')
+
+df_supDem = curr_df[['Unnamed: 1', 'Unnamed: 2', 'Unnamed: 3']].iloc[3:13,:].reset_index(drop=True)
+df_currMat = curr_df[['Unnamed: 1', 'Unnamed: 2', 'Unnamed: 3', 'Unnamed: 4',
+       'Unnamed: 5', 'Unnamed: 6', 'Unnamed: 7', 'Unnamed: 8', 'Unnamed: 9',
+       'Unnamed: 10', 'Unnamed: 11']].iloc[16:,:].reset_index(drop=True)
+
+
+df_supDem = df_supDem.rename(columns={'Unnamed: 1':'curr', 'Unnamed: 2':'supply', 'Unnamed: 3':'demand'})
+
+df_currMat=df_currMat.fillna("nan")
+col_list = list(range(1,11))
+col_list.insert(0, 'curr')
+df_currMat.columns = col_list
+df_currMat = df_currMat.iloc[1:]
+df_currMat=df_currMat.reset_index(drop=True)
+
+
+df_supDem['curr'] = list(range(1,11))
+df_currMat['curr'] = list(range(1,11))
+
+x_cont = [[LpVariable(str(i)+'_'+str(j), lowBound=0) for i in list(range(1,11))] for j in list(range(1,11))]
+x_cont_transpose = pd.DataFrame(x_cont).transpose().values.tolist()
+
+
+####################################################################################
+####################################################################################
+
+prob = LpProblem("FX Supply Demand", LpMaximize)
+
+# objective function
+prob += (
+    lpSum([(1/(df_currMat[df_currMat['curr']==2][i]))*lpSum(x_cont_transpose[i-1]) for i in list(range(1,11))])
+)
+
+# constraint - 1
+for i in list(range(1,11)):
+    prob += (
+        lpSum(lpSum(x_cont_transpose[i-1])) >= df_supDem['demand'].iloc[i-1]
+    )
+
+# constraint - 2
+for j in list(range(1,11)):
+    prob += (
+        lpSum([a*b for a,b in zip((df_currMat[j]),x_cont[j-1])]) == df_supDem['supply'].iloc[j-1]
+    )
+
+print(prob)
+  
+status = prob.solve()   # Solver
+print(LpStatus[status]) 
+
+np.array([x_cont[i][j].varValue for i in range(0,10) for j in range(0,10)])
+value(prob.objective)
+
+####################################################################################
+####################################################################################
+
+
+
+
+prob = LpProblem("FX Arbitrage", LpMaximize)
+
+prob += (
+    x_cont[1][1]
+)
+
+for j in list(range(1,11)):
+    if j == 2:
+        prob += (
+            x_cont[1][1]+lpSum(x_cont_transpose[j-1])-lpSum([a*b for a,b in zip((df_currMat[j]),x_cont[j-1])]) == 90
+        )
+    else:
+        prob += (
+            lpSum(x_cont_transpose[j-1])-lpSum([a*b for a,b in zip((df_currMat[j]),x_cont[j-1])]) == 0
+        )
+
+
+for j in list(range(1,11)):
+    for i in list(range(1,11)):
+        if i != 2:
+            if i == j:
+                prob += (
+                    x_cont_transpose[i-1][j-1] == 0
+                )
+
+
+prob += (
+    x_cont[1][1]<= 91
+)
+
+
+print(prob)
+  
+status = prob.solve()   # Solver
+print(LpStatus[status]) 
+print(value(prob.objective))
+
+for j in range(0,10):
+    string = ""
+    for i in range(0,10):
+        string = string + str(x_cont[i][j].varValue) + '   '
+    print(string)
+
+
+
+
+
+
+
+
+
+
